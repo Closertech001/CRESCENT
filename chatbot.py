@@ -203,8 +203,3 @@ if user_input:
                     store_in_history(user_input, gpt_reply)
                     save_to_log("anonymous", user_input)
 
-# --- Debugging ---
-if st.checkbox("🔍 Show Debug Info"):
-    st.write("Normalized Input:", normalize_text(user_input))
-    st.write("Corrected Input:", correct_text(sym_spell, user_input))
-
