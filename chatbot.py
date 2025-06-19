@@ -9,6 +9,13 @@ from symspellpy.symspellpy import SymSpell
 import pkg_resources
 import openai
 
+# --- Constants ---
+SYSTEM_PROMPT = (
+    "You are a warm, friendly assistant for Crescent University. "
+    "You speak clearly, casually, and helpfully like a human. You use emojis, ask clarifying questions if needed, "
+    "and always try to give a complete answer."
+)
+
 # --- Page Setup ---
 st.set_page_config(page_title="Crescent University Chatbot", layout="centered")
 st.title("🎓 Crescent University Chatbot")
@@ -52,9 +59,9 @@ SYNONYMS = {
 def normalize_text(text):
     text = text.lower()
     for k, v in ABBREVIATIONS.items():
-        text = re.sub(rf"\b{k}\b", v, text)
+        text = re.sub(rf"\\b{k}\\b", v, text)
     for k, v in SYNONYMS.items():
-        text = re.sub(rf"\b{k}\b", v, text)
+        text = re.sub(rf"\\b{k}\\b", v, text)
     return text
 
 def load_symspell():
@@ -84,9 +91,7 @@ def setup():
     return model, sym_spell, data, embeddings
 
 model, sym_spell, qa_data, qa_embeddings = setup()
-
-# --- OpenAI Key (Replace or use Streamlit secrets) ---
-openai.api_key = st.secrets["OPENAI_API_KEY"] if "OPENAI_API_KEY" in st.secrets else "sk-..."
+openai.api_key = st.secrets.get("OPENAI_API_KEY", "sk-...")
 
 # --- Memory State ---
 if "chat_history" not in st.session_state:
@@ -104,22 +109,20 @@ def get_greeting_response():
     ])
 
 def handle_small_talk(text):
-    triggers = {
-        "how are you": "I'm doing great, thanks for asking! 😊 How can I assist you?",
-        "thank you": "You're welcome! Let me know if there's anything else.",
-        "thanks": "Glad I could help!",
-        "who are you": "I'm your Crescent University assistant, here to help!"
-    }
-    for k, v in triggers.items():
-        if k in text.lower():
-            return v
+    lower = text.lower()
+    if any(kw in lower for kw in ["how are you", "what’s up", "how’s it going"]):
+        return random.choice(["I'm doing great, thanks for asking! 😊", "All good here! What can I help you with?"])
+    elif any(kw in lower for kw in ["thank you", "thanks", "appreciate"]):
+        return random.choice(["You're very welcome!", "Glad I could help!", "Anytime! 😊"])
+    elif "who are you" in lower or "what are you" in lower:
+        return "I'm your friendly Crescent University assistant bot 🤖 here to guide you through anything CUAB!"
     return None
 
 def resolve_follow_up(current_input):
-    if any(x in current_input.lower() for x in ["what about", "how about", "and the"]):
+    if any(x in current_input.lower() for x in ["what about", "how about", "and the", "tell me more", "same for"]):
         if st.session_state.chat_history:
-            last_topic = st.session_state.chat_history[-1]["user"]
-            return f"{last_topic} {current_input}"
+            last_bot = st.session_state.chat_history[-1]["bot"]
+            return f"{last_bot} — {current_input}"
     return current_input
 
 def store_in_history(user_q, bot_a):
@@ -131,9 +134,9 @@ def save_to_log(user, query):
         f.write("\n")
 
 def friendly_wrap(response):
-    return f"🙂 {response}" if not response.lower().startswith("sorry") else response
+    emojis = ["🙂", "😊", "😄", "✨", "🙌"]
+    return f"{random.choice(emojis)} {response}" if not response.lower().startswith("sorry") else response
 
-# --- Search Logic ---
 def search_answer(user_query, threshold=0.65):
     norm = normalize_text(user_query)
     corrected = correct_text(sym_spell, norm)
@@ -148,9 +151,16 @@ def search_answer(user_query, threshold=0.65):
 
 def get_gpt_answer(prompt):
     try:
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        for h in st.session_state.chat_history[-3:]:
+            messages.append({"role": "user", "content": h["user"]})
+            messages.append({"role": "assistant", "content": h["bot"]})
+        messages.append({"role": "user", "content": prompt})
         response = openai.ChatCompletion.create(
             model="gpt-4",
-            messages=[{"role": "user", "content": prompt}]
+            temperature=0.7,
+            top_p=0.9,
+            messages=messages
         )
         return response.choices[0].message.content.strip()
     except Exception:
@@ -193,3 +203,9 @@ if user_input:
                     st.info(gpt_reply)
                     store_in_history(user_input, gpt_reply)
                     save_to_log("anonymous", user_input)
+
+# --- Debugging ---
+if st.checkbox("🔍 Show Debug Info"):
+    st.write("Normalized Input:", normalize_text(user_input))
+    st.write("Corrected Input:", correct_text(sym_spell, user_input))
+
