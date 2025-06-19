@@ -167,7 +167,6 @@ def get_gpt_answer(prompt):
         return "Sorry, GPT is currently unavailable."
 
 # --- Display Conversation History ---
-st.subheader("🗨️ Conversation History")
 for msg in st.session_state.chat_history:
     with st.chat_message("user"):
         st.markdown(msg["user"])
