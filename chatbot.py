@@ -110,14 +110,41 @@ def get_gpt_answer(prompt):
     except Exception:
         return "Sorry, GPT is currently unavailable."
 
+# --- Display Conversation History ---
+st.subheader("🗨️ Conversation History")
+for msg in st.session_state.chat_history:
+    with st.chat_message("user"):
+        st.markdown(msg["user"])
+    with st.chat_message("assistant"):
+        st.markdown(msg["bot"])
+
 # --- Streamlit UI ---
-user_input = st.text_input("Ask me anything about Crescent University 🏫", key="input")
+user_input = st.chat_input("Ask me anything about Crescent University 🏫")
 
 if user_input:
-    with st.spinner("Thinking..."):
-        answer = search_answer(user_input)
-        if answer:
-            st.success(answer)
+    if is_greeting(user_input):
+        greeting = get_greeting_response()
+        st.success(greeting)
+        store_in_history(user_input, greeting)
+        save_to_log("anonymous", user_input)
+    else:
+        small_talk = handle_small_talk(user_input)
+        if small_talk:
+            st.info(small_talk)
+            store_in_history(user_input, small_talk)
+            save_to_log("anonymous", user_input)
         else:
-            gpt_reply = get_gpt_answer(user_input)
-            st.info(gpt_reply)
+            resolved_input = resolve_follow_up(user_input)
+            with st.spinner("Thinking..."):
+                answer = search_answer(resolved_input)
+                if answer:
+                    wrapped = friendly_wrap(answer)
+                    st.success(wrapped)
+                    store_in_history(user_input, wrapped)
+                    save_to_log("anonymous", user_input)
+                else:
+                    gpt_reply = get_gpt_answer(resolved_input)
+                    st.info(gpt_reply)
+                    store_in_history(user_input, gpt_reply)
+                    save_to_log("anonymous", user_input)
+
