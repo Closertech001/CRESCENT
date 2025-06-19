@@ -3,6 +3,7 @@ import streamlit as st
 import re
 import json
 import torch
+import random
 from sentence_transformers import SentenceTransformer, util
 from symspellpy.symspellpy import SymSpell
 import pkg_resources
@@ -87,6 +88,51 @@ model, sym_spell, qa_data, qa_embeddings = setup()
 # --- OpenAI Key (Replace or use Streamlit secrets) ---
 openai.api_key = st.secrets["OPENAI_API_KEY"] if "OPENAI_API_KEY" in st.secrets else "sk-..."
 
+# --- Memory State ---
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+def is_greeting(text):
+    greetings = ["hi", "hello", "hey", "good morning", "good afternoon", "good evening"]
+    return any(greet in text.lower() for greet in greetings)
+
+def get_greeting_response():
+    return random.choice([
+        "Hello! 👋 How can I help you today?",
+        "Hi there! Ask me anything about Crescent University 😊",
+        "Welcome! What would you like to know about CUAB?"
+    ])
+
+def handle_small_talk(text):
+    triggers = {
+        "how are you": "I'm doing great, thanks for asking! 😊 How can I assist you?",
+        "thank you": "You're welcome! Let me know if there's anything else.",
+        "thanks": "Glad I could help!",
+        "who are you": "I'm your Crescent University assistant, here to help!"
+    }
+    for k, v in triggers.items():
+        if k in text.lower():
+            return v
+    return None
+
+def resolve_follow_up(current_input):
+    if any(x in current_input.lower() for x in ["what about", "how about", "and the"]):
+        if st.session_state.chat_history:
+            last_topic = st.session_state.chat_history[-1]["user"]
+            return f"{last_topic} {current_input}"
+    return current_input
+
+def store_in_history(user_q, bot_a):
+    st.session_state.chat_history.append({"user": user_q, "bot": bot_a})
+
+def save_to_log(user, query):
+    with open("chat_log.json", "a", encoding="utf-8") as f:
+        json.dump({"user": user, "query": query}, f)
+        f.write("\n")
+
+def friendly_wrap(response):
+    return f"🙂 {response}" if not response.lower().startswith("sorry") else response
+
 # --- Search Logic ---
 def search_answer(user_query, threshold=0.65):
     norm = normalize_text(user_query)
@@ -147,4 +193,3 @@ if user_input:
                     st.info(gpt_reply)
                     store_in_history(user_input, gpt_reply)
                     save_to_log("anonymous", user_input)
-
