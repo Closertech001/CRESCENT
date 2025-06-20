@@ -17278,5 +17278,101 @@
     "department": "Mass Communication",
     "faculty": "CASMAS",
     "level": "400"
+  },
+  {
+    "question": "What undergraduate degree programs does Crescent University offer?",
+    "answer": "CUAB offers a wide range of undergraduate programs across various colleges:\n- College of Natural & Applied Sciences: Biochemistry, Computer Science, Microbiology, etc.\n- College of Social & Management Sciences: Accounting, Business Administration, etc.\n- Bola Ajibola College of Law: Law\n- College of Environmental Sciences, Health Sciences, ICT, etc.",
+    "topic": "admission",
+    "department": "",
+    "faculty": "",
+    "level": ""
+  },
+  {
+    "question": "What are the school fees for undergraduate programs at Crescent University?",
+    "answer": "**New students:**\n- Application: \u20a610,000 (\u20a620,000 Nursing)\n- Acceptance: \u20a650,000\n- Tuition: \u20a6733,000\u2013\u20a61,653,000 (varies by course)\n\n**Returning students:**\n- Lower fees apply\n- Law: \u20a61,000,000 (300L+), CS: \u20a6630,000, etc.",
+    "topic": "finance",
+    "department": "",
+    "faculty": "",
+    "level": ""
+  },
+  {
+    "question": "What is the academic calendar at Crescent University?",
+    "answer": "CUAB operates two semesters:\n- First semester: ~October to March (20 weeks)\n- Second semester: ~March to July (16 weeks)\nIncludes breaks, assessments, and holidays.",
+    "topic": "academics",
+    "department": "",
+    "faculty": "",
+    "level": ""
+  },
+  {
+    "question": "What accommodation facilities are available for students at Crescent University?",
+    "answer": "Male hostels include Saudi Hall, Dangote Hall, and others.\nFacilities: en-suite bathrooms, gyms, lounges, and optional bungalows.\nRules include restrictions on guests and early withdrawal refund policies.",
+    "topic": "hostel",
+    "department": "",
+    "faculty": "",
+    "level": ""
+  },
+  {
+    "question": "How can I contact Crescent University?",
+    "answer": "\ud83d\udccd Address: KM\u202f5 Ayetoro Road, Lafenwa, Abeokuta, Ogun State, Nigeria\n\ud83d\udcde Phone: +234\u202f803\u202f836\u202f2771, +234\u202f803\u202f064\u202f4731\n\ud83d\udce7 Email: info@cuab.edu.ng, admissions@cuab.edu.ng",
+    "topic": "general",
+    "department": "",
+    "faculty": "",
+    "level": ""
+  },
+  {
+    "question": "Is Crescent University a Muslim university?",
+    "answer": "Crescent University is an Islamic faith-based but inclusive institution.\nOpen to all, founded by Islamic Mission for Africa and licensed by NUC in 2005.",
+    "topic": "university",
+    "department": "",
+    "faculty": "",
+    "level": ""
+  },
+  {
+    "question": "When is the SIWES program scheduled for students?",
+    "answer": "SIWES (Student Industrial Work Experience Scheme) is typically scheduled during the long vacation after 300-level for most departments, though some begin after 200-level. Duration: 3 months.",
+    "topic": "academics",
+    "department": "",
+    "faculty": "",
+    "level": "300"
+  },
+  {
+    "question": "When is the convocation ceremony held at Crescent University?",
+    "answer": "Convocation at CUAB is held in October every academic year.",
+    "topic": "university",
+    "department": "",
+    "faculty": "",
+    "level": ""
+  },
+  {
+    "question": "What postgraduate programs does Crescent University offer?",
+    "answer": "CUAB offers postgraduate diplomas, master's, and Ph.D. programs in Accounting, Computer Science, Mass Communication, Biochemistry, Business Administration, etc.",
+    "topic": "postgraduate",
+    "department": "",
+    "faculty": "",
+    "level": ""
+  },
+  {
+    "question": "What is the grading system used at Crescent University?",
+    "answer": "A: 70\u2013100 (5 points), B: 60\u201369 (4 points), C: 50\u201359 (3 points), D: 45\u201349 (2 points), E: 40\u201344 (1 point), F: 0\u201339 (0 points).",
+    "topic": "exam",
+    "department": "",
+    "faculty": "",
+    "level": ""
+  },
+  {
+    "question": "What documents are required for registration?",
+    "answer": "1. JAMB Admission Letter\n2. O'Level Result (WAEC/NECO/NABTEB)\n3. Acceptance Fee Receipt\n4. Medical Certificate\n5. Passport photographs\n6. Evidence of payment\n7. Birth Certificate",
+    "topic": "admission",
+    "department": "",
+    "faculty": "",
+    "level": ""
+  },
+  {
+    "question": "How can I reset my Crescent University portal password?",
+    "answer": "Go to the student portal login page, click 'Forgot Password', enter your email or matric number, and follow the instructions sent to your email.",
+    "topic": "technical",
+    "department": "",
+    "faculty": "",
+    "level": ""
   }
 ]
