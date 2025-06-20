@@ -11,8 +11,7 @@ import pkg_resources
 import openai
 from datetime import datetime
 import os
-import inflect
-from pattern.en import conjugate, lemma
+import inflect  # Only required new dependency
 
 # --- Initialize Inflect Engine ---
 p = inflect.engine()
@@ -30,7 +29,8 @@ You are CUAB Buddy, the friendly assistant for Crescent University. Follow these
 # --- Enhanced Normalization Dictionaries ---
 VERB_CONJUGATIONS = {
     "does": "do", "has": "have", "was": "be", "were": "be",
-    "did": "do", "are": "be", "is": "be", "studies": "study"
+    "did": "do", "are": "be", "is": "be", "studies": "study",
+    "teaches": "teach", "offers": "offer", "requires": "require"
 }
 
 PLURAL_MAP = {
@@ -105,13 +105,14 @@ if "last_topic" not in st.session_state:
     st.session_state.last_topic = None
 
 # --- Enhanced Helper Functions ---
+# --- Modified normalize_text() Function ---
 def normalize_text(text):
     text = text.lower().strip()
     
-    # Step 1: Preserve course codes (GST 111 → gst111)
+    # 1. Preserve course codes (GST 111 → gst111)
     text = re.sub(r'([a-z]{2,4})[\s-]?(\d{3})', r'\1\2', text)
     
-    # Step 2: Convert plurals to singular
+    # 2. Convert plurals to singular
     words = []
     for word in text.split():
         # Handle special cases first
@@ -126,26 +127,18 @@ def normalize_text(text):
     
     text = " ".join(words)
     
-    # Step 3: Lemmatize verbs (running → run)
-    text = " ".join([lemma(word) for word in text.split()])
-    
-    # Step 4: Apply existing normalizations
+    # 3. Apply existing normalizations
     for k, v in {**ABBREVIATIONS, **SYNONYMS}.items():
         text = re.sub(rf"\b{k}\b", v, text)
     
     return text
 
 def detect_verb_forms(text):
-    """Identify and normalize verb conjugations"""
-    verbs = ["be", "have", "do", "study", "offer", "require"]
+    """Simplified verb normalization without pattern.en"""
     words = text.split()
     for i, word in enumerate(words):
         if word in VERB_CONJUGATIONS:
             words[i] = VERB_CONJUGATIONS[word]
-        else:
-            base_form = conjugate(word, tense="infinitive")
-            if base_form in verbs:
-                words[i] = base_form
     return " ".join(words)
 
 def correct_text(sym_spell, input_text):
