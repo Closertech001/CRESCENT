@@ -90,11 +90,19 @@ if "last_topic" not in st.session_state:
 
 # --- Helper Functions ---
 def normalize_text(text):
-    text = text.lower()
+    text = text.lower().strip()
+    
+    # Preserve course codes (e.g., GST 111, ACC-113)
+    course_codes = re.findall(r'([a-z]{2,4}\s?-?\s?\d{3})', text)
+    for code in course_codes:
+        text = text.replace(code, code.replace(" ", "").replace("-", ""))  # Standardize format
+    
+    # Apply other normalizations
     for k, v in ABBREVIATIONS.items():
         text = re.sub(rf"\b{k}\b", v, text)
     for k, v in SYNONYMS.items():
         text = re.sub(rf"\b{k}\b", v, text)
+    
     return text
 
 def correct_text(sym_spell, input_text):
@@ -178,23 +186,41 @@ def stream_response(response):
         message_placeholder.markdown(full_response + "▌")
     message_placeholder.markdown(full_response)
 
-def search_answer(user_query, threshold=0.65):
+def search_answer(user_query, threshold=0.55):  # Lowered threshold
     try:
-        norm = normalize_text(user_query)
-        corrected = correct_text(sym_spell, norm)
-        user_embedding = model.encode(corrected, convert_to_tensor=True)
+        norm_query = normalize_text(user_query)
+        
+        # Bypass correction for course codes
+        if re.search(r'[a-z]{2,4}\d{3}', norm_query):
+            corrected_query = norm_query
+        else:
+            corrected_query = correct_text(sym_spell, norm_query)
+
+        user_embedding = model.encode(corrected_query, convert_to_tensor=True)
 
         if qa_embeddings is None:
             return None
 
-        similarity_scores = util.cos_sim(user_embedding, qa_embeddings)[0]
-        best_idx = torch.argmax(similarity_scores).item()
-        best_score = similarity_scores[best_idx].item()
+        # Compare against each question
+        best_score = 0
+        best_answer = None
+        
+        for idx, qa in enumerate(qa_data):
+            # Direct string match for course codes
+            if "course" in qa["question"].lower() and "code" in qa["question"].lower():
+                q_codes = re.findall(r'([a-z]{2,4}\d{3})', qa["question"].lower())
+                u_codes = re.findall(r'([a-z]{2,4}\d{3})', norm_query)
+                if q_codes and u_codes and (q_codes[0] == u_codes[0]):
+                    return qa["answer"]
+            
+            # Semantic similarity fallback
+            similarity = util.cos_sim(user_embedding, qa_embeddings[idx]).item()
+            if similarity > best_score:
+                best_score = similarity
+                best_answer = qa["answer"]
 
-        if best_score > threshold:
-            st.session_state.last_topic = qa_data[best_idx].get("topic")
-            return qa_data[best_idx]["answer"]
-        return None
+        return best_answer if best_score > threshold else None
+        
     except Exception as e:
         st.error(f"Search error: {str(e)}")
         return None
