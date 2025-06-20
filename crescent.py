@@ -11,6 +11,11 @@ import pkg_resources
 import openai
 from datetime import datetime
 import os
+import inflect
+from pattern.en import conjugate, lemma
+
+# --- Initialize Inflect Engine ---
+p = inflect.engine()
 
 # --- Constants ---
 SYSTEM_PROMPT = """
@@ -22,7 +27,18 @@ You are CUAB Buddy, the friendly assistant for Crescent University. Follow these
 5. Acknowledge emotions ("Sorry to hear that! Let me fix this...").
 """
 
-# --- Normalization Dictionaries ---
+# --- Enhanced Normalization Dictionaries ---
+VERB_CONJUGATIONS = {
+    "does": "do", "has": "have", "was": "be", "were": "be",
+    "did": "do", "are": "be", "is": "be", "studies": "study"
+}
+
+PLURAL_MAP = {
+    "courses": "course", "subjects": "subject", "lecturers": "lecturer",
+    "departments": "department", "faculties": "faculty", "fees": "fee",
+    "requirements": "requirement", "books": "book", "students": "student"
+}
+
 ABBREVIATIONS = {
     "u": "you", "r": "are", "ur": "your", "cn": "can", "cud": "could",
     "shud": "should", "wud": "would", "abt": "about", "bcz": "because",
@@ -88,24 +104,54 @@ if "chat_history" not in st.session_state:
 if "last_topic" not in st.session_state:
     st.session_state.last_topic = None
 
-# --- Helper Functions ---
+# --- Enhanced Helper Functions ---
 def normalize_text(text):
     text = text.lower().strip()
     
-    # Preserve course codes (e.g., GST 111, ACC-113)
-    course_codes = re.findall(r'([a-z]{2,4}\s?-?\s?\d{3})', text)
-    for code in course_codes:
-        text = text.replace(code, code.replace(" ", "").replace("-", ""))  # Standardize format
+    # Step 1: Preserve course codes (GST 111 → gst111)
+    text = re.sub(r'([a-z]{2,4})[\s-]?(\d{3})', r'\1\2', text)
     
-    # Apply other normalizations
-    for k, v in ABBREVIATIONS.items():
-        text = re.sub(rf"\b{k}\b", v, text)
-    for k, v in SYNONYMS.items():
+    # Step 2: Convert plurals to singular
+    words = []
+    for word in text.split():
+        # Handle special cases first
+        if word in VERB_CONJUGATIONS:
+            words.append(VERB_CONJUGATIONS[word])
+        elif word in PLURAL_MAP:
+            words.append(PLURAL_MAP[word])
+        else:
+            # Use inflect for general cases
+            singular = p.singular_noun(word)
+            words.append(singular if singular else word)
+    
+    text = " ".join(words)
+    
+    # Step 3: Lemmatize verbs (running → run)
+    text = " ".join([lemma(word) for word in text.split()])
+    
+    # Step 4: Apply existing normalizations
+    for k, v in {**ABBREVIATIONS, **SYNONYMS}.items():
         text = re.sub(rf"\b{k}\b", v, text)
     
     return text
 
+def detect_verb_forms(text):
+    """Identify and normalize verb conjugations"""
+    verbs = ["be", "have", "do", "study", "offer", "require"]
+    words = text.split()
+    for i, word in enumerate(words):
+        if word in VERB_CONJUGATIONS:
+            words[i] = VERB_CONJUGATIONS[word]
+        else:
+            base_form = conjugate(word, tense="infinitive")
+            if base_form in verbs:
+                words[i] = base_form
+    return " ".join(words)
+
 def correct_text(sym_spell, input_text):
+    # Skip correction for course codes
+    if re.search(r'[a-z]{2,4}\d{3}', input_text):
+        return input_text
     suggestions = sym_spell.lookup_compound(input_text, max_edit_distance=2)
     return suggestions[0].term if suggestions else input_text
 
@@ -186,41 +232,34 @@ def stream_response(response):
         message_placeholder.markdown(full_response + "▌")
     message_placeholder.markdown(full_response)
 
-def search_answer(user_query, threshold=0.55):  # Lowered threshold
+# --- Enhanced Search Function ---
+def search_answer(user_query, threshold=0.5):
     try:
-        norm_query = normalize_text(user_query)
+        # Advanced normalization
+        processed_query = detect_verb_forms(normalize_text(user_query))
         
-        # Bypass correction for course codes
-        if re.search(r'[a-z]{2,4}\d{3}', norm_query):
-            corrected_query = norm_query
-        else:
-            corrected_query = correct_text(sym_spell, norm_query)
-
-        user_embedding = model.encode(corrected_query, convert_to_tensor=True)
-
-        if qa_embeddings is None:
-            return None
-
-        # Compare against each question
-        best_score = 0
-        best_answer = None
+        # Exact match check with smart normalization
+        for qa in qa_data:
+            normalized_db_q = normalize_text(qa["question"])
+            if (processed_query == normalized_db_q or 
+                f"what is {processed_query}" in normalized_db_q):
+                return qa["answer"]
         
-        for idx, qa in enumerate(qa_data):
-            # Direct string match for course codes
-            if "course" in qa["question"].lower() and "code" in qa["question"].lower():
-                q_codes = re.findall(r'([a-z]{2,4}\d{3})', qa["question"].lower())
-                u_codes = re.findall(r'([a-z]{2,4}\d{3})', norm_query)
-                if q_codes and u_codes and (q_codes[0] == u_codes[0]):
+        # Semantic search fallback
+        query_embed = model.encode(processed_query, convert_to_tensor=True)
+        scores = util.cos_sim(query_embed, qa_embeddings)[0]
+        
+        best_idx = torch.argmax(scores).item()
+        if scores[best_idx] > threshold:
+            return qa_data[best_idx]["answer"]
+        
+        # Final attempt: Course code direct lookup
+        if (course_code := re.search(r'[a-z]{2,4}\d{3}', processed_query)):
+            for qa in qa_data:
+                if course_code.group() in qa["question"].lower():
                     return qa["answer"]
-            
-            # Semantic similarity fallback
-            similarity = util.cos_sim(user_embedding, qa_embeddings[idx]).item()
-            if similarity > best_score:
-                best_score = similarity
-                best_answer = qa["answer"]
-
-        return best_answer if best_score > threshold else None
-        
+                
+        return None
     except Exception as e:
         st.error(f"Search error: {str(e)}")
         return None
