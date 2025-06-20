@@ -70,12 +70,6 @@ for key in ["chat_history", "last_topic"]:
     if key not in st.session_state:
         st.session_state[key] = [] if key == "chat_history" else None
 
-# --- UI Filters ---
-faculty = st.selectbox("Faculty", ["", "Law", "Health Sciences", "Natural and Applied Sciences", "Arts and Social Sciences", "Environmental Sciences"])
-department = st.selectbox("Department", ["", "Computer Science", "Mass Communication", "Nursing", "Accounting", "Architecture"])
-level = st.selectbox("Level", ["", "100", "200", "300", "400", "500"])
-semester = st.selectbox("Semester", ["", "First", "Second"])
-
 # --- Helper Functions ---
 def is_greeting(text):
     return any(greet in text.lower() for greet in ["hi", "hello", "hey", "good morning", "good afternoon", "good evening"])
