@@ -1,5 +1,3 @@
-# This version includes improvements for all 8 steps
-
 # --- Imports ---
 import streamlit as st
 import re
@@ -7,10 +5,11 @@ import json
 import torch
 import random
 from sentence_transformers import SentenceTransformer, util
-from symspellpy.symspellpy import SymSpell
+from symspellpy import SymSpell
 import pkg_resources
 import openai
 from datetime import datetime
+import os
 
 # --- Constants ---
 SYSTEM_PROMPT = (
@@ -24,21 +23,38 @@ st.set_page_config(page_title="CUAB Buddy - Crescent University Chatbot", layout
 st.title("🎓 CUAB Buddy - Crescent University Chatbot")
 
 # --- Normalization Dictionaries ---
-ABBREVIATIONS = {...}  # Same as before
-SYNONYMS = {...}        # Same as before
+ABBREVIATIONS = {
+    "cuab": "crescent university",
+    "uni": "university",
+    "dept": "department",
+    "admin": "admission",
+    "app": "application",
+    "bsc": "bachelor of science",
+    "ba": "bachelor of arts",
+    "phd": "doctorate"
+}
+
+SYNONYMS = {
+    "courses": "programs",
+    "fees": "tuition",
+    "hostel": "dormitory",
+    "lib": "library",
+    "lecturer": "professor"
+}
 
 # --- Normalization Functions ---
 def normalize_text(text):
     text = text.lower()
     for k, v in ABBREVIATIONS.items():
-        text = re.sub(rf"\\b{k}\\b", v, text)
+        text = re.sub(rf"\b{k}\b", v, text)
     for k, v in SYNONYMS.items():
-        text = re.sub(rf"\\b{k}\\b", v, text)
+        text = re.sub(rf"\b{k}\b", v, text)
     return text
 
 def load_symspell():
     sym_spell = SymSpell(max_dictionary_edit_distance=2)
-    dictionary_path = pkg_resources.resource_filename("symspellpy", "frequency_dictionary_en_82_765.txt")
+    dictionary_path = pkg_resources.resource_filename(
+        "symspellpy", "frequency_dictionary_en_82_765.txt")
     sym_spell.load_dictionary(dictionary_path, term_index=0, count_index=1)
     return sym_spell
 
@@ -48,11 +64,15 @@ def correct_text(sym_spell, input_text):
 
 # --- Load Dataset and Embed ---
 def load_data_and_embed(model, path="qa_data.json"):
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    questions = [item["question"] for item in data]
-    embeddings = model.encode(questions, convert_to_tensor=True)
-    return data, embeddings
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        questions = [item["question"] for item in data]
+        embeddings = model.encode(questions, convert_to_tensor=True)
+        return data, embeddings
+    except Exception as e:
+        st.error(f"Error loading dataset: {str(e)}")
+        return [], None
 
 # --- Setup Resources ---
 @st.cache_resource()
@@ -63,12 +83,13 @@ def setup():
     return model, sym_spell, data, embeddings
 
 model, sym_spell, qa_data, qa_embeddings = setup()
-openai.api_key = st.secrets.get("OPENAI_API_KEY", "sk-...")
+openai.api_key = os.getenv("OPENAI_API_KEY", st.secrets.get("OPENAI_API_KEY", ""))
 
 # --- Session State ---
-for key in ["chat_history", "last_topic"]:
-    if key not in st.session_state:
-        st.session_state[key] = [] if key == "chat_history" else None
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+if "last_topic" not in st.session_state:
+    st.session_state.last_topic = None
 
 # --- Helper Functions ---
 def is_greeting(text):
@@ -92,8 +113,8 @@ def handle_small_talk(text):
     return None
 
 def resolve_follow_up(current_input):
-    if any(x in current_input.lower() for x in ["what about", "how about", "and the", "tell me more", "same for"]):
-        last_bot = st.session_state.chat_history[-1]["bot"] if st.session_state.chat_history else ""
+    if st.session_state.chat_history and any(x in current_input.lower() for x in ["what about", "how about", "and the", "tell me more", "same for"]):
+        last_bot = st.session_state.chat_history[-1]["bot"]
         return f"{last_bot} — {current_input}"
     return current_input
 
@@ -101,40 +122,37 @@ def store_in_history(user_q, bot_a):
     st.session_state.chat_history.append({"user": user_q, "bot": bot_a})
 
 def save_to_log(user, query):
-    with open("chat_log.json", "a", encoding="utf-8") as f:
-        json.dump({"user": user, "query": query, "timestamp": str(datetime.now())}, f)
-        f.write("\n")
+    try:
+        with open("chat_log.json", "a", encoding="utf-8") as f:
+            json.dump({"user": user, "query": query, "timestamp": str(datetime.now())}, f)
+            f.write("\n")
+    except Exception as e:
+        st.error(f"Error saving log: {str(e)}")
 
 def friendly_wrap(response):
     emojis = ["🙂", "😊", "😄", "✨", "🙌"]
     return f"{random.choice(emojis)} {response}" if not response.lower().startswith("sorry") else response
 
 def search_answer(user_query, threshold=0.65):
-    norm = normalize_text(user_query)
-    corrected = correct_text(sym_spell, norm)
-    user_embedding = model.encode(corrected, convert_to_tensor=True)
+    try:
+        norm = normalize_text(user_query)
+        corrected = correct_text(sym_spell, norm)
+        user_embedding = model.encode(corrected, convert_to_tensor=True)
 
-    filtered_data = []
-    filtered_embeddings = []
-    for i, item in enumerate(qa_data):
-        if (not faculty or item.get("faculty") == faculty) and \
-           (not department or item.get("department") == department) and \
-           (not level or item.get("level") == level) and \
-           (not semester or item.get("semester") == semester):
-            filtered_data.append(item)
-            filtered_embeddings.append(qa_embeddings[i])
+        if qa_embeddings is None:
+            return None
 
-    if not filtered_data:
+        similarity_scores = util.cos_sim(user_embedding, qa_embeddings)[0]
+        best_idx = torch.argmax(similarity_scores).item()
+        best_score = similarity_scores[best_idx].item()
+
+        if best_score > threshold:
+            st.session_state.last_topic = qa_data[best_idx].get("topic")
+            return qa_data[best_idx]["answer"]
         return None
-
-    similarity_scores = util.cos_sim(user_embedding, torch.stack(filtered_embeddings))[0]
-    best_idx = torch.argmax(similarity_scores).item()
-    best_score = similarity_scores[best_idx].item()
-
-    if best_score > threshold:
-        st.session_state.last_topic = filtered_data[best_idx].get("topic")
-        return filtered_data[best_idx]["answer"]
-    return None
+    except Exception as e:
+        st.error(f"Search error: {str(e)}")
+        return None
 
 def get_gpt_answer(prompt):
     try:
@@ -143,15 +161,17 @@ def get_gpt_answer(prompt):
             messages.append({"role": "user", "content": h["user"]})
             messages.append({"role": "assistant", "content": h["bot"]})
         messages.append({"role": "user", "content": prompt})
+        
         response = openai.ChatCompletion.create(
-            model="gpt-4",
+            model="gpt-3.5-turbo",  # Changed to more affordable model
             temperature=0.7,
             top_p=0.9,
             messages=messages
         )
         return response.choices[0].message.content.strip()
-    except Exception:
-        return "Sorry, GPT is currently unavailable."
+    except Exception as e:
+        st.error(f"GPT error: {str(e)}")
+        return "Sorry, I'm having trouble connecting to the knowledge base. Please try again later."
 
 # --- Display Chat ---
 for msg in st.session_state.chat_history:
@@ -165,13 +185,15 @@ user_input = st.chat_input("Ask me anything about Crescent University 🏫")
 if user_input:
     if is_greeting(user_input):
         greeting = get_greeting_response()
-        st.success(greeting)
+        with st.chat_message("assistant"):
+            st.markdown(greeting)
         store_in_history(user_input, greeting)
         save_to_log("anonymous", user_input)
     else:
         small_talk = handle_small_talk(user_input)
         if small_talk:
-            st.info(small_talk)
+            with st.chat_message("assistant"):
+                st.markdown(small_talk)
             store_in_history(user_input, small_talk)
             save_to_log("anonymous", user_input)
         else:
@@ -180,11 +202,13 @@ if user_input:
                 answer = search_answer(resolved_input)
                 if answer:
                     wrapped = friendly_wrap(answer)
-                    st.success(wrapped)
+                    with st.chat_message("assistant"):
+                        st.markdown(wrapped)
                     store_in_history(user_input, wrapped)
                     save_to_log("anonymous", user_input)
                 else:
                     gpt_reply = get_gpt_answer(resolved_input)
-                    st.info(gpt_reply)
+                    with st.chat_message("assistant"):
+                        st.markdown(gpt_reply)
                     store_in_history(user_input, gpt_reply)
                     save_to_log("anonymous", user_input)
